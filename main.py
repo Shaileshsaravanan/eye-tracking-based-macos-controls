@@ -3,14 +3,19 @@ import mediapipe as mp
 import pyautogui
 import numpy as np
 from gaze_tracking import GazeTracking
+import speech_recognition as sr
+import threading
+import queue
 
-# Initialize camera and gaze tracking
+# Initialize camera
 cam = cv2.VideoCapture(0)
 pyautogui.FAILSAFE = False
-gaze = GazeTracking()
 
 # Initialize MediaPipe Face Mesh
 face_mesh = mp.solutions.face_mesh.FaceMesh(refine_landmarks=True)
+
+# Initialize Gaze Tracking
+gaze = GazeTracking()
 
 # Screen dimensions
 screen_w, screen_h = pyautogui.size()
@@ -29,6 +34,71 @@ smoothed_x, smoothed_y = screen_x, screen_y
 # Blinking detection variables
 blink_start_time = None
 is_blinking = False
+
+# Speech processing class
+class SpeechProcessor:
+    def __init__(self):
+        self.recognizer = sr.Recognizer()
+        self.audio_queue = queue.Queue()
+        self.stop_event = threading.Event()
+        self.end_counter = 0  # Counter for consecutive 'end' commands
+        self.previous_commands = []  # Store last few commands
+
+    def listen_thread(self):
+        with sr.Microphone() as source:
+            print("Adjusting for ambient noise, please wait...")
+            self.recognizer.adjust_for_ambient_noise(source)
+            print("Listening...")
+
+            while not self.stop_event.is_set():
+                try:
+                    # Capture audio from the microphone
+                    audio = self.recognizer.listen(source, timeout=None, phrase_time_limit=5)
+                    self.audio_queue.put(audio)
+                except sr.WaitTimeoutError:
+                    # Continue listening in case of timeout
+                    pass
+
+    def process_thread(self):
+        while not self.stop_event.is_set():
+            if not self.audio_queue.empty():
+                audio = self.audio_queue.get()
+                try:
+                    # Recognize speech using Google Web Speech API
+                    response = self.recognizer.recognize_google(audio).lower()
+                    print(f"Recognized text: {response}")
+                    
+                    # Store the command
+                    self.previous_commands.append(response)
+                    if len(self.previous_commands) > 3:
+                        self.previous_commands.pop(0)
+
+                    # Check for consecutive 'end' commands
+                    if self.previous_commands == ['end', 'end', 'end']:
+                        print("Detected 'end' three times consecutively. Exiting...")
+                        self.stop_event.set()  # Signal to stop the program
+                    else:
+                        pyautogui.write(response + ' ')
+                except sr.UnknownValueError:
+                    # Handle the case when speech is unintelligible
+                    pass
+                except sr.RequestError as e:
+                    # Handle the case when there's a problem with the API request
+                    print(f"Sorry, there was an error with the request: {e}")
+
+    def start(self):
+        # Start the listening and processing threads
+        listen_thread = threading.Thread(target=self.listen_thread)
+        process_thread = threading.Thread(target=self.process_thread)
+
+        listen_thread.start()
+        process_thread.start()
+
+        return listen_thread, process_thread
+
+# Initialize speech processor
+speech_processor = SpeechProcessor()
+listen_thread, process_thread = speech_processor.start()
 
 # Function to draw a small green X
 def draw_x(img, center, size=5, color=(0, 255, 0)):
@@ -50,7 +120,7 @@ def calculate_avg_landmark_position(landmarks, indices, frame_w, frame_h):
 # Landmarks indices for full face tracking
 all_landmarks_indices = list(range(468))  # Face Mesh provides 468 landmarks
 
-while True:
+while not speech_processor.stop_event.is_set():
     # Capture a new frame from the webcam
     _, frame = cam.read()
     frame = cv2.flip(frame, 1)
@@ -147,3 +217,8 @@ while True:
 # Release the camera and destroy all OpenCV windows
 cam.release()
 cv2.destroyAllWindows()
+
+# Stop speech processor
+speech_processor.stop_event.set()
+listen_thread.join()
+process_thread.join()
