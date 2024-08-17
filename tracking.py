@@ -1,8 +1,15 @@
 import cv2
 from gaze_tracking import GazeTracking
+import pyautogui
 
 gaze = GazeTracking()
 webcam = cv2.VideoCapture(0)
+
+# Retrieve the screen dimensions
+screen_width, screen_height = pyautogui.size()
+
+# Initialize previous gaze point to avoid excessive cursor movements
+prev_gaze_point = None
 
 while True:
     # Capture a new frame from the webcam
@@ -26,15 +33,24 @@ while True:
 
     cv2.putText(frame, text, (90, 60), cv2.FONT_HERSHEY_DUPLEX, 1.6, (147, 58, 31), 2)
 
-    # Get and display the coordinates of the pupils
-    left_pupil = gaze.pupil_left_coords()
-    right_pupil = gaze.pupil_right_coords()
-    cv2.putText(frame, "Left pupil:  " + str(left_pupil), (90, 130), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
-    cv2.putText(frame, "Right pupil: " + str(right_pupil), (90, 165), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
-
-    # Get and display the screen coordinates where the user is looking
+    # Get the gaze point and move the cursor accordingly
     gaze_point = gaze.get_gaze_point()
     if gaze_point:
+        x_coord, y_coord = gaze_point
+        
+        # Ensure gaze point is within the screen dimensions
+        x_coord = min(max(x_coord, 0), screen_width - 1)
+        y_coord = min(max(y_coord, 0), screen_height - 1)
+
+        # Move the cursor only if the gaze point has changed significantly
+        if prev_gaze_point is None or (
+            abs(prev_gaze_point[0] - x_coord) > 5 or
+            abs(prev_gaze_point[1] - y_coord) > 5
+        ):
+            pyautogui.moveTo(x_coord, y_coord)
+            prev_gaze_point = (x_coord, y_coord)
+
+        # Display the gaze point on the frame
         cv2.putText(frame, f"Gaze Point: {gaze_point}", (90, 200), cv2.FONT_HERSHEY_DUPLEX, 0.9, (147, 58, 31), 1)
 
     # Display the annotated frame
