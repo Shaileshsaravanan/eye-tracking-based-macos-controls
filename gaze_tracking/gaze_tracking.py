@@ -2,6 +2,7 @@ import os
 import cv2
 import dlib
 from .eye import Eye
+import pyautogui
 from .calibration import Calibration
 
 
@@ -39,7 +40,7 @@ class GazeTracking(object):
             return False
 
     def _analyze(self):
-        """Detects the face and initialize Eye objects"""
+        """Detects the face and initializes Eye objects"""
         frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
         faces = self._face_detector(frame)
 
@@ -67,14 +68,14 @@ class GazeTracking(object):
     def pupil_right_coords(self):
         """Returns the coordinates of the right pupil"""
         if self.pupils_located:
-            x = self.eye_right.origin[0] + self.eye_left.pupil.x
-            y = self.eye_right.origin[1] + self.eye_left.pupil.y
+            x = self.eye_right.origin[0] + self.eye_right.pupil.x
+            y = self.eye_right.origin[1] + self.eye_right.pupil.y
             return (x, y)
 
     def horizontal_ratio(self):
         """Returns a number between 0.0 and 1.0 that indicates the
         horizontal direction of the gaze. The extreme right is 0.0,
-        the center is 0.5 and the extreme left is 1.0
+        the center is 0.5, and the extreme left is 1.0
         """
         if self.pupils_located:
             pupil_left = self.eye_left.pupil.x / (self.eye_left.center[0] * 2 - 10)
@@ -84,7 +85,7 @@ class GazeTracking(object):
     def vertical_ratio(self):
         """Returns a number between 0.0 and 1.0 that indicates the
         vertical direction of the gaze. The extreme top is 0.0,
-        the center is 0.5 and the extreme bottom is 1.0
+        the center is 0.5, and the extreme bottom is 1.0
         """
         if self.pupils_located:
             pupil_left = self.eye_left.pupil.y / (self.eye_left.center[1] * 2 - 10)
@@ -104,7 +105,7 @@ class GazeTracking(object):
     def is_center(self):
         """Returns true if the user is looking to the center"""
         if self.pupils_located:
-            return self.is_right() is not True and self.is_left() is not True
+            return not self.is_right() and not self.is_left()
 
     def is_blinking(self):
         """Returns true if the user closes his eyes"""
@@ -126,3 +127,19 @@ class GazeTracking(object):
             cv2.line(frame, (x_right, y_right - 5), (x_right, y_right + 5), color)
 
         return frame
+    
+    def get_gaze_point(self):
+        """Returns the coordinates on the screen where the user is looking."""
+        screen_width, screen_height = pyautogui.size()
+
+        if self.pupils_located:
+            horizontal_ratio = self.horizontal_ratio()
+            vertical_ratio = self.vertical_ratio()
+
+            # Calculate screen coordinates
+            x_coord = int(horizontal_ratio * screen_width)
+            y_coord = int(vertical_ratio * screen_height)
+
+            return (x_coord, y_coord)
+
+        return None

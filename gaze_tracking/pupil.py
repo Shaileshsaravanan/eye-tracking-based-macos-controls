@@ -44,5 +44,11 @@ class Pupil(object):
             moments = cv2.moments(contours[-2])
             self.x = int(moments['m10'] / moments['m00'])
             self.y = int(moments['m01'] / moments['m00'])
-        except IndexError:
-            pass
+        except (IndexError, ZeroDivisionError):
+            # If no contour or moments['m00'] is zero, set default values
+            self.x = None
+            self.y = None
+
+    def get_pupil_coordinates(self):
+        """Returns the coordinates of the pupil"""
+        return self.x, self.y

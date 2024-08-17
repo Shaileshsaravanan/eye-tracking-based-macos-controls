@@ -1,5 +1,6 @@
 from __future__ import division
 import cv2
+import numpy as np
 from .pupil import Pupil
 
 
@@ -13,6 +14,8 @@ class Calibration(object):
         self.nb_frames = 20
         self.thresholds_left = []
         self.thresholds_right = []
+        self.screen_points = []
+        self.eye_positions = []
 
     def is_complete(self):
         """Returns true if the calibration is completed"""
@@ -74,3 +77,26 @@ class Calibration(object):
             self.thresholds_left.append(threshold)
         elif side == 1:
             self.thresholds_right.append(threshold)
+
+    def add_calibration_point(self, eye_position, screen_point):
+        """Stores eye positions and corresponding screen points for calibration.
+
+        Arguments:
+            eye_position: Tuple (x, y) representing the eye position
+            screen_point: Tuple (x, y) representing the screen point
+        """
+        self.eye_positions.append(eye_position)
+        self.screen_points.append(screen_point)
+
+    def get_mapping(self):
+        """Returns a polynomial mapping from eye positions to screen coordinates."""
+        if len(self.screen_points) < 4:
+            return None  # Need at least 4 points to fit a polynomial
+
+        eye_positions_np = np.array(self.eye_positions)
+        screen_points_np = np.array(self.screen_points)
+
+        x_coefficients = np.polyfit(eye_positions_np[:, 0], screen_points_np[:, 0], 2)
+        y_coefficients = np.polyfit(eye_positions_np[:, 1], screen_points_np[:, 1], 2)
+
+        return x_coefficients, y_coefficients
